@@ -24,12 +24,40 @@ class InquiryTest < ActiveSupport::TestCase
     assert_equal "名古屋市", i.address
   end
 
-  test "選択肢にない修理内容は捨てる" do
-    assert_equal %w[トイレ], build(repair_item_list: %w[トイレ 存在しない項目 <script>]).repair_item_list
+  test "選択肢にない依頼場所は捨てる" do
+    assert_equal %w[トイレ], build(location_list: %w[トイレ 存在しない場所 <script>]).location_list
   end
 
-  test "修理内容は「、」区切りで保存する" do
-    assert_equal "トイレ、水漏れ", build.repair_items
+  test "依頼場所は「、」区切りで保存する" do
+    assert_equal "トイレ、洗面所", build.locations
+  end
+
+  test "希望内容を選んでいなければエラー" do
+    assert_includes errors_for(request_type: ""), "③ お客様の希望内容を選んでください"
+  end
+
+  test "希望内容は決められた4種類だけ" do
+    AppSettings.request_types.each { |type| assert_empty errors_for(request_type: type) }
+    assert_includes errors_for(request_type: "なんでも"), "③ お客様の希望内容を選んでください"
+  end
+
+  test "希望内容で絞り込める" do
+    create_inquiry(customer_name: "見積の客", request_type: "見積もり依頼")
+    create_inquiry(customer_name: "修理の客", request_type: "クレーム・修理依頼")
+    assert_equal ["見積の客"], Inquiry.of_type("見積もり依頼").map(&:customer_name)
+    assert_equal 2, Inquiry.of_type("").count
+  end
+
+  test "3ステップにする前の受付は希望内容を未設定と表示する" do
+    i = create_inquiry
+    i.update_column(:request_type, nil)
+    assert_equal "未設定", i.reload.request_type_label
+  end
+
+  test "3ステップにする前の受付も、そのまま保存し直せる" do
+    i = create_inquiry
+    i.update_column(:request_type, nil)
+    assert i.reload.update(detail: "あとから追記")
   end
 
   test "緊急度が不正な値なら通常にする" do
@@ -68,16 +96,43 @@ class InquiryTest < ActiveSupport::TestCase
     assert_empty errors_for(phone: "09012345678")
   end
 
-  test "修理内容もメモも空ならエラー" do
-    assert_includes errors_for(repair_item_list: [], detail: ""), "修理内容を1つ以上選ぶか、詳細メモを入力してください"
+  test "依頼場所も問い合わせ内容も伝達事項も空ならエラー" do
+    assert_includes errors_for(location_list: [], issue_list: [], detail: ""),
+                    "① 依頼場所か ② 問い合わせ内容を選ぶか、④ に内容を書いてください"
   end
 
-  test "修理内容が未選択でもメモがあればOK" do
-    assert_empty errors_for(repair_item_list: [], detail: "雨戸が閉まらない")
+  test "どれか1つでも入っていればOK" do
+    assert_empty errors_for(location_list: [], issue_list: [], detail: "雨戸が閉まらない")
+    assert_empty errors_for(location_list: [], issue_list: %w[雨漏りしている], detail: "")
+    assert_empty errors_for(location_list: %w[屋根], issue_list: [], detail: "")
+  end
+
+  test "問い合わせ内容は「、」区切りで保存し、選択肢にないものは捨てる" do
+    i = build(issue_list: ["お風呂が水漏れしている", "存在しない内容", "玄関の鍵が開かない"])
+    assert_equal "お風呂が水漏れしている、玄関の鍵が開かない", i.issues
+    assert_equal ["お風呂が水漏れしている", "玄関の鍵が開かない"], i.issue_list
+  end
+
+  test "問い合わせ内容で「その他」を選んだら伝達事項が必要" do
+    assert_includes errors_for(issue_list: %w[その他], detail: ""), "② で「その他」を選んだときは、④ に内容を書いてください"
+    assert_empty errors_for(issue_list: %w[その他], detail: "網戸が外れた")
+  end
+
+  test "問い合わせ内容でも検索できる" do
+    create_inquiry(customer_name: "鍵の客", issue_list: %w[玄関の鍵が開かない])
+    create_inquiry(customer_name: "雨の客", issue_list: %w[雨漏りしている])
+    assert_equal ["鍵の客"], Inquiry.search("鍵が開かない").map(&:customer_name)
+  end
+
+  test "よくある問い合わせ内容は10個とその他" do
+    assert_equal 11, AppSettings.all_issues.size
+    assert_equal "その他", AppSettings.all_issues.last
+    linked = AppSettings::COMMON_ISSUES.values.flatten.uniq
+    assert_empty linked - AppSettings.all_locations, "関係する場所は ① の選択肢から選ぶ"
   end
 
   test "複数のエラーをまとめて返す" do
-    assert_equal 3, errors_for(customer_name: "", address: "", phone: "").size
+    assert_equal 4, errors_for(customer_name: "", address: "", phone: "", request_type: "").size
   end
 
   test "氏名・電話番号・住所で検索できる" do

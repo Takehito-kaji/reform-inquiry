@@ -10,7 +10,7 @@ class SlackMessageTest < ActiveSupport::TestCase
 
   def inquiry(attrs = {})
     create_inquiry({
-      customer_kana: "ヤマモト ハナコ", postal_code: "460-0001", repair_item_list: %w[トイレ 水漏れ],
+      customer_kana: "ヤマモト ハナコ", postal_code: "460-0001", location_list: %w[トイレ 洗面所], issue_list: %w[トイレが水漏れしている お湯が出ない],
       detail: "床が濡れている", contact_time: "午前中", created_at: Time.zone.local(2026, 10, 13, 9, 5)
     }.merge(attrs))
   end
@@ -54,9 +54,10 @@ class SlackMessageTest < ActiveSupport::TestCase
     i = inquiry
     t = text(i)
     [
-      "新規リフォーム問い合わせ No.#{i.id}", "担当営業：山田", "山本 花子 様（ヤマモト ハナコ）",
+      "新規問い合わせ【クレーム・修理依頼】 No.#{i.id}", "担当営業：山田", "山本 花子 様（ヤマモト ハナコ）",
       "090-1234-5678", "〒460-0001 愛知県名古屋市中区三の丸1-1", "連絡希望*：午前中",
-      "トイレ、水漏れ", "床が濡れている", "受付：事務A　10/13 09:05"
+      "*希望内容*：クレーム・修理依頼", "*依頼場所*：トイレ、洗面所",
+      "*問い合わせ内容*：トイレが水漏れしている、お湯が出ない", "*伝達事項*：\n床が濡れている", "受付：事務A　10/13 09:05"
     ].each { |part| assert_includes t, part }
   end
 
@@ -64,9 +65,18 @@ class SlackMessageTest < ActiveSupport::TestCase
     assert_match %r{<https://www\.google\.com/maps/search/\?api=1&query=[^|]+\|地図を開く>}, text
   end
 
-  test "通常は電話マーク、急ぎは目立つ見出し" do
-    assert_includes text, "📞"
+  test "見出しのマークは希望内容ごとに変わり、急ぎは目立つ見出し" do
+    assert_includes text(inquiry(request_type: "リフォーム依頼")), "🏠 *新規問い合わせ【リフォーム依頼】"
+    assert_includes text(inquiry(request_type: "見積もり依頼")), "💴 *新規問い合わせ【見積もり依頼】"
     assert_includes text(inquiry(urgency: "至急（当日中）")), "🚨【至急（当日中）】"
+  end
+
+  test "3ステップにする前の受付は未設定と表示する" do
+    i = inquiry
+    i.update_column(:request_type, nil)
+    t = text(i.reload)
+    assert_includes t, "📞 *新規問い合わせ【未設定】"
+    assert_includes t, "*希望内容*：未設定"
   end
 
   test "メンションは1行目に入る" do
@@ -80,11 +90,13 @@ class SlackMessageTest < ActiveSupport::TestCase
     refute_includes t, "（）"
     refute_includes t, "〒"
     refute_includes t, "連絡希望"
-    refute_includes t, "*詳細*"
+    refute_includes t, "*伝達事項*"
   end
 
-  test "修理内容が空ならメモ参照と表示" do
-    assert_includes text(inquiry(repair_item_list: [])), "（詳細メモ参照）"
+  test "依頼場所や問い合わせ内容が空なら伝達事項を参照と表示" do
+    t = text(inquiry(location_list: [], issue_list: []))
+    assert_includes t, "*依頼場所*：（伝達事項を参照）"
+    assert_includes t, "*問い合わせ内容*：（伝達事項を参照）"
   end
 
   test "メモに全員通知の書式を書かれても通知は飛ばない" do

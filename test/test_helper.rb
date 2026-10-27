@@ -36,7 +36,9 @@ module TestHelpers
       phone:            "090-1234-5678",
       postal_code:      "460-0001",
       address:          "愛知県名古屋市中区三の丸1-1",
-      repair_item_list: %w[トイレ 水漏れ],
+      location_list:    %w[トイレ 洗面所],
+      issue_list:       %w[トイレが水漏れしている],
+      request_type:     "クレーム・修理依頼",
       detail:           "2階トイレの床から水がにじんでいる",
       urgency:          "通常",
       contact_time:     "午前中",
@@ -48,7 +50,7 @@ module TestHelpers
   def create_inquiry(attrs = {})
     Inquiry.create!({
       received_by: "事務A", customer_name: "山本 花子", phone: "090-1234-5678",
-      address: "愛知県名古屋市中区三の丸1-1", repair_item_list: %w[トイレ], urgency: "通常",
+      address: "愛知県名古屋市中区三の丸1-1", location_list: %w[トイレ], request_type: "クレーム・修理依頼", urgency: "通常",
       sales_person: "山田"
     }.merge(attrs))
   end

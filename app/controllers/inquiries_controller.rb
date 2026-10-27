@@ -3,8 +3,9 @@ class InquiriesController < ApplicationController
 
   # 受付履歴
   def index
-    @q = params[:q].to_s.strip
-    @inquiries  = Inquiry.search(@q).order(id: :desc).limit(100)
+    @q    = params[:q].to_s.strip
+    @type = AppSettings.request_types.include?(params[:type]) ? params[:type] : ""
+    @inquiries  = Inquiry.search(@q).of_type(@type).order(id: :desc).limit(100)
     @pdf_counts = Attachment.where(inquiry_id: @inquiries.map(&:id)).group(:inquiry_id).count
   end
 
@@ -58,7 +59,7 @@ class InquiriesController < ApplicationController
   def inquiry_params
     params.require(:inquiry).permit(
       :received_by, :customer_name, :customer_kana, :phone, :postal_code, :address,
-      :detail, :urgency, :contact_time, :sales_person, repair_item_list: []
+      :detail, :urgency, :contact_time, :sales_person, :request_type, location_list: [], issue_list: []
     )
   end
 

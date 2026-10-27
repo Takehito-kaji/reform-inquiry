@@ -179,7 +179,7 @@ class SlackNotifierBotTest < ActiveSupport::TestCase
     assert_requested(:post, "#{API}chat.postMessage", times: 1) do |req|
       body = JSON.parse(req.body)
       req.headers["Authorization"] == "Bearer #{TOKEN}" && body["channel"] == CHANNEL &&
-        body["text"].include?("新規リフォーム問い合わせ")
+        body["text"].include?("新規問い合わせ【クレーム・修理依頼】")
     end
     assert_not_requested :post, WEBHOOK_URL
     assert_not_requested :post, "#{API}files.completeUploadExternal"

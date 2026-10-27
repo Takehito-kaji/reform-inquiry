@@ -1,19 +1,21 @@
 <div class="sheet wide">
   <%= form_with url: inquiries_path, method: :get, class: "search" do %>
-    <%= search_field_tag :q, @q, placeholder: "氏名・電話番号・住所で検索" %>
+    <%= search_field_tag :q, @q, placeholder: "氏名・電話番号・住所・問い合わせ内容で検索" %>
+    <%= select_tag :type, options_for_select([["すべての希望内容", ""], *AppSettings.request_types], @type),
+                   "aria-label": "希望内容で絞り込む" %>
     <button type="submit" class="btn-sub">検索</button>
   <% end %>
 
   <% if @inquiries.empty? %>
     <p class="empty">
-      <%= @q.empty? ? "まだ受付がありません。" : "該当する受付はありません。" %>
+      <%= @q.empty? && @type.empty? ? "まだ受付がありません。" : "該当する受付はありません。" %>
       <%= link_to "新規入力", new_inquiry_path %>
     </p>
   <% else %>
     <div class="table-wrap">
       <table class="list">
         <thead>
-          <tr><th>No.</th><th>受付日時</th><th>お客様</th><th>依頼内容</th><th>担当</th><th>送信</th></tr>
+          <tr><th>No.</th><th>受付日時</th><th>お客様</th><th>希望内容・問い合わせ</th><th>担当</th><th>送信</th></tr>
         </thead>
         <tbody>
           <% @inquiries.each do |i| %>
@@ -26,7 +28,10 @@
                 <% if i.urgent? %><span class="badge badge-warn"><%= i.urgency %></span><% end %>
                 <div class="small"><%= i.phone %></div>
               </td>
-              <td><%= i.repair_items %></td>
+              <td>
+                <span class="badge badge-type"><%= i.request_type_label %></span>
+                <div class="small"><%= [i.locations, i.issues].compact_blank.join("｜") %></div>
+              </td>
               <td class="nowrap"><%= i.sales_person %></td>
               <td>
                 <% if i.chat_sent %><span class="badge badge-ok">済</span><% else %><span class="badge badge-err">未送信</span><% end %>

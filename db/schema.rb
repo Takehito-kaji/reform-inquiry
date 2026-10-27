@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_10_27_000002) do
+ActiveRecord::Schema[8.0].define(version: 2026_10_27_000004) do
   create_table "attachments", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.bigint "inquiry_id", null: false
     t.string "filename", null: false
@@ -28,7 +28,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_27_000002) do
     t.string "phone", limit: 20, null: false
     t.string "postal_code", limit: 10
     t.string "address", null: false
-    t.text "repair_items", null: false
+    t.text "locations", null: false
     t.text "detail"
     t.string "urgency", limit: 20, default: "通常", null: false
     t.string "contact_time", limit: 50
@@ -38,7 +38,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_27_000002) do
     t.text "chat_error"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "request_type", limit: 30
+    t.text "issues"
     t.index ["created_at"], name: "index_inquiries_on_created_at"
+    t.index ["request_type"], name: "index_inquiries_on_request_type"
   end
 
   add_foreign_key "attachments", "inquiries"

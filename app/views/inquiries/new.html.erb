@@ -7,9 +7,9 @@
     </div>
   <% end %>
 
-  <%# ① お客様情報 %>
+  <%# お客様情報 %>
   <section class="block">
-    <h2><span class="step">1</span>お客様情報</h2>
+    <h2>お客様情報</h2>
 
     <div class="row two">
       <label>氏名 <em>必須</em>
@@ -37,39 +37,93 @@
     </label>
   </section>
 
-  <%# ② 依頼内容 %>
-  <section class="block">
-    <h2><span class="step">2</span>依頼内容 <small>当てはまるものをすべてタップ</small></h2>
+  <%# ご依頼内容：① 依頼場所 → ② 問い合わせ内容 → ③ 希望内容 → ④ その他伝達事項 %>
+  <section class="block request">
+    <h2>ご依頼内容</h2>
+    <ol class="stepper four" id="stepper">
+      <li data-step="1"><a href="#step-1"><b>1</b>依頼場所</a></li>
+      <li data-step="2"><a href="#step-2"><b>2</b>問い合わせ</a></li>
+      <li data-step="3"><a href="#step-3"><b>3</b>希望内容</a></li>
+      <li data-step="4"><a href="#step-4"><b>4</b>伝達事項</a></li>
+    </ol>
 
-    <% AppSettings::REPAIR_CATEGORIES.each do |group, items| %>
-      <fieldset class="chips">
-        <legend><%= group %></legend>
-        <% items.each do |item| %>
-          <label class="chip">
-            <%= check_box_tag "inquiry[repair_item_list][]", item, @inquiry.repair_item_list.include?(item), id: nil %>
-            <span><%= item %></span>
+    <div class="substep" id="step-1" data-step="1">
+      <h3><span class="num">1</span>修理の依頼場所 <small>当てはまる場所をすべてタップ</small></h3>
+      <% AppSettings::REPAIR_LOCATIONS.each do |group, places| %>
+        <fieldset class="chips">
+          <legend><%= group %></legend>
+          <% places.each do |place| %>
+            <label class="chip">
+              <%= check_box_tag "inquiry[location_list][]", place, @inquiry.location_list.include?(place), id: nil %>
+              <span><%= place %></span>
+            </label>
+          <% end %>
+        </fieldset>
+      <% end %>
+      <div class="step-foot">
+        <p class="step-note" id="location-note">場所が分からないときは、そのまま次へ進んでください</p>
+        <button type="button" class="btn-next" data-go="2">次へ：問い合わせ内容</button>
+      </div>
+    </div>
+
+    <div class="substep" id="step-2" data-step="2">
+      <h3><span class="num">2</span>問い合わせ内容 <small>当てはまるものをすべてタップ</small></h3>
+      <p class="step-lead" id="issue-lead" hidden>① で選んだ場所によくある内容を先に並べています</p>
+      <fieldset class="issue-grid">
+        <legend class="sr-only">問い合わせ内容</legend>
+        <% AppSettings::COMMON_ISSUES.each do |issue, places| %>
+          <label class="issue" data-places="<%= places.join(',') %>">
+            <%= check_box_tag "inquiry[issue_list][]", issue, @inquiry.issue_list.include?(issue), id: nil %>
+            <span><%= issue %></span>
           </label>
         <% end %>
       </fieldset>
-    <% end %>
-
-    <%= f.label :detail, "詳細メモ", class: "label-top" %>
-    <div class="phrases">
-      <% AppSettings::QUICK_PHRASES.each do |phrase| %>
-        <button type="button" class="phrase" data-text="<%= phrase %>">＋<%= phrase %></button>
-      <% end %>
-    </div>
-    <%= f.text_area :detail, rows: 4, placeholder: "例：2階トイレの床から水がにじんでいる" %>
-
-    <div class="attach">
-      <span class="label-top">PDFを添付 <small>図面・見積依頼書など（<%= AppSettings::MAX_PDF_COUNT %>個まで、1つ<%= AppSettings::MAX_PDF_SIZE_MB %>MBまで）</small></span>
-      <label class="dropzone" id="dropzone">
-        <%= f.file_field :attachments, multiple: true, accept: "application/pdf,.pdf" %>
-        <span>ここにPDFをドラッグ、または<u>ファイルを選ぶ</u></span>
-      </label>
-      <ul class="file-list" id="file-list" aria-live="polite"></ul>
+      <div class="step-foot">
+        <p class="step-note" id="issue-note">当てはまるものがなければ「その他」を選び、④ に内容を書いてください</p>
+        <button type="button" class="btn-next" data-go="3">次へ：希望内容</button>
+      </div>
     </div>
 
+    <div class="substep" id="step-3" data-step="3">
+      <h3><span class="num">3</span>お客様の希望内容 <em>必須</em></h3>
+      <fieldset class="type-grid">
+        <legend class="sr-only">お客様の希望内容</legend>
+        <% AppSettings::REQUEST_TYPES.each do |type, description| %>
+          <label class="type-card">
+            <%= f.radio_button :request_type, type %>
+            <span><strong><%= type %></strong><small><%= description %></small></span>
+          </label>
+        <% end %>
+      </fieldset>
+    </div>
+
+    <div class="substep" id="step-4" data-step="4">
+      <h3><span class="num">4</span>その他伝達事項 <small>営業に伝えたいことを自由に</small></h3>
+      <div class="phrases">
+        <% AppSettings::QUICK_PHRASES.each do |type, phrases| %>
+          <% phrases.each do |phrase| %>
+            <button type="button" class="phrase" data-text="<%= phrase %>" data-type="<%= type %>">＋<%= phrase %></button>
+          <% end %>
+        <% end %>
+      </div>
+      <%= f.text_area :detail, rows: 5, "aria-label": "その他伝達事項",
+            placeholder: AppSettings::DETAIL_EXAMPLES.fetch(@inquiry.request_type, "例：お客様から聞いた内容をそのまま書いてください"),
+            data: { examples: AppSettings::DETAIL_EXAMPLES.to_json } %>
+
+      <div class="attach">
+        <span class="label-top">PDFを添付 <small>図面・見積依頼書など（<%= AppSettings::MAX_PDF_COUNT %>個まで、1つ<%= AppSettings::MAX_PDF_SIZE_MB %>MBまで）</small></span>
+        <label class="dropzone" id="dropzone">
+          <%= f.file_field :attachments, multiple: true, accept: "application/pdf,.pdf" %>
+          <span>ここにPDFをドラッグ、または<u>ファイルを選ぶ</u></span>
+        </label>
+        <ul class="file-list" id="file-list" aria-live="polite"></ul>
+      </div>
+    </div>
+  </section>
+
+  <%# 対応（緊急度・担当） %>
+  <section class="block">
+    <h2>対応</h2>
     <fieldset class="segmented">
       <legend>緊急度</legend>
       <% AppSettings::URGENCY.each_with_index do |urgency, idx| %>
@@ -93,33 +147,95 @@
     </div>
   </section>
 
-  <%# ③ 送信 %>
   <div class="submitbar">
-    <p class="summary" id="summary">依頼内容：未選択</p>
+    <p class="summary" id="summary">希望内容：未選択</p>
     <button type="submit" class="btn-main" id="submit-btn">保存して営業に送る</button>
   </div>
 <% end %>
 
 <script>
+  const form    = document.getElementById('inquiry-form');
+  const detail  = document.getElementById('inquiry_detail');
+  const summary = document.getElementById('summary');
+  const placeBoxes = [...document.querySelectorAll('input[name="inquiry[location_list][]"]')];
+  const issueBoxes = [...document.querySelectorAll('input[name="inquiry[issue_list][]"]')];
+  const typeRadios = [...document.querySelectorAll('input[name="inquiry[request_type]"]')];
+  const phraseBtns = [...document.querySelectorAll('.phrase')];
+  const examples   = JSON.parse(detail.dataset.examples || '{}');
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const LAST = 4;
+
+  function goTo(step) {
+    const el = document.getElementById('step-' + step);
+    el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+    if (step === 3) (typeRadios.find(r => r.checked) || typeRadios[0]).focus({ preventScroll: true });
+    if (step === LAST) detail.focus({ preventScroll: true });
+  }
+
+  // ① で選んだ場所に関係する問い合わせ内容を先頭に並べる（「その他」はいつもいちばん最後）
+  function sortIssues(places) {
+    let related = 0;
+    issueBoxes.forEach(box => {
+      const label = box.closest('.issue');
+      const linked = (label.dataset.places || '').split(',').filter(Boolean);
+      const hit = places.some(p => linked.includes(p));
+      if (hit) related++;
+      label.classList.toggle('related', hit);
+      label.style.order = box.value === 'その他' ? 2 : (hit ? 0 : 1);
+    });
+    document.getElementById('issue-lead').hidden = related === 0;
+  }
+
+  // ステップの状態（済み・今ここ）と、下のバーの表示を更新する
+  function refresh() {
+    const places = placeBoxes.filter(c => c.checked).map(c => c.value);
+    const issues = issueBoxes.filter(c => c.checked).map(c => c.value);
+    const type   = (typeRadios.find(r => r.checked) || {}).value || '';
+    const done = { 1: places.length > 0, 2: issues.length > 0, 3: type !== '', 4: detail.value.trim() !== '' };
+    const current = [1, 2, 3, 4].find(n => !done[n]) || LAST;
+
+    document.querySelectorAll('[data-step]').forEach(el => {
+      const n = Number(el.dataset.step);
+      el.classList.toggle('done', done[n]);
+      el.classList.toggle('current', n === current);
+    });
+
+    sortIssues(places);
+
+    // ③ に合わせて、④ の定型文と記入例を切り替える
+    phraseBtns.forEach(b => { b.hidden = !(b.dataset.type === '共通' || b.dataset.type === type); });
+    if (examples[type]) detail.placeholder = examples[type];
+
+    document.getElementById('location-note').textContent =
+      places.length ? '選んだ場所：' + places.join('、') : '場所が分からないときは、そのまま次へ進んでください';
+    document.getElementById('issue-note').textContent =
+      issues.includes('その他') ? '「その他」を選んだので、④ に内容を書いてください'
+        : issues.length ? '選んだ内容：' + issues.join('、')
+        : '当てはまるものがなければ「その他」を選び、④ に内容を書いてください';
+    const parts = [places.join('、'), issues.join('、')].filter(Boolean).join('｜');
+    summary.textContent = (type ? '【' + type + '】' : '希望内容：未選択　') + parts;
+  }
+
+  document.querySelectorAll('.btn-next').forEach(b => b.addEventListener('click', () => goTo(Number(b.dataset.go))));
+  document.querySelectorAll('.stepper a').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    goTo(Number(a.parentElement.dataset.step));
+  }));
+  placeBoxes.forEach(c => c.addEventListener('change', refresh));
+  issueBoxes.forEach(c => c.addEventListener('change', refresh));
+  typeRadios.forEach(r => r.addEventListener('change', () => { refresh(); goTo(LAST); }));
+  detail.addEventListener('input', refresh);
+
   // 定型文をメモに追加
-  const detail = document.getElementById('inquiry_detail');
-  document.querySelectorAll('.phrase').forEach(btn => {
+  phraseBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const t = btn.dataset.text;
       detail.value = detail.value.trim() ? detail.value.trimEnd() + '\n' + t : t;
       detail.focus();
+      refresh();
     });
   });
-
-  // 選んだ内容を下のバーに表示
-  const summary = document.getElementById('summary');
-  const itemBoxes = document.querySelectorAll('input[name="inquiry[repair_item_list][]"]');
-  function updateSummary() {
-    const picked = [...itemBoxes].filter(c => c.checked).map(c => c.value);
-    summary.textContent = '依頼内容：' + (picked.length ? picked.join('、') : '未選択');
-  }
-  itemBoxes.forEach(c => c.addEventListener('change', updateSummary));
-  updateSummary();
+  refresh();
 
   // 郵便番号から住所を入力
   const zipInput = document.getElementById('inquiry_postal_code');
@@ -185,7 +301,7 @@
   ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, () => dropzone.classList.remove('over')));
 
   // 二重送信を防ぐ（添付PDFに問題があるときは送信せず、一覧の赤い行で知らせる）
-  document.getElementById('inquiry-form').addEventListener('submit', (e) => {
+  form.addEventListener('submit', (e) => {
     if (fileProblem) {
       e.preventDefault();
       dropzone.scrollIntoView({ block: 'center' });

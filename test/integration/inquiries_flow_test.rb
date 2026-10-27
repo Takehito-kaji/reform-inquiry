@@ -12,11 +12,17 @@ class InquiriesFlowTest < ActionDispatch::IntegrationTest
     assert_select "form#inquiry-form[enctype='multipart/form-data']"
   end
 
-  test "入力画面に修理内容・担当営業・定型文の選択肢がすべて並ぶ" do
+  test "入力画面に依頼場所・問い合わせ内容・希望内容・担当営業・定型文の選択肢がすべて並ぶ" do
     get new_inquiry_path
-    AppSettings.all_repair_items.each { |item| assert_select "input[type=checkbox][value=?]", item }
+    AppSettings.all_locations.each { |place| assert_select "input[type=checkbox][name='inquiry[location_list][]'][value=?]", place }
+    AppSettings::COMMON_ISSUES.each do |issue, places|
+      assert_select "label.issue[data-places=?] input[type=checkbox][name='inquiry[issue_list][]'][value=?]", places.join(","), issue
+    end
+    AppSettings.request_types.each { |type| assert_select "input[type=radio][name='inquiry[request_type]'][value=?]", type }
     AppSettings.sales_people.each { |name| assert_select "select[name='inquiry[sales_person]'] option", text: name }
-    AppSettings::QUICK_PHRASES.each { |phrase| assert_select "button.phrase[data-text=?]", phrase }
+    AppSettings::QUICK_PHRASES.each do |type, phrases|
+      phrases.each { |phrase| assert_select "button.phrase[data-text=?][data-type=?]", phrase, type }
+    end
     assert_select "input[type=file][name='inquiry[attachments][]'][multiple][accept='application/pdf,.pdf']"
   end
 
@@ -27,7 +33,9 @@ class InquiriesFlowTest < ActionDispatch::IntegrationTest
     end
     saved = Inquiry.last
     assert_redirected_to inquiry_path(saved, from: "new")
-    assert_equal "トイレ、水漏れ", saved.repair_items
+    assert_equal "トイレ、洗面所", saved.locations
+    assert_equal "クレーム・修理依頼", saved.request_type
+    assert_equal "トイレが水漏れしている", saved.issues
     assert saved.chat_sent
     assert_includes sent_webhook_texts.first, "No.#{saved.id}"
 
@@ -57,6 +65,8 @@ class InquiriesFlowTest < ActionDispatch::IntegrationTest
     assert_select ".alert-error", text: /電話番号を入力してください/
     assert_select "input[name='inquiry[address]'][value=?]", "愛知県名古屋市中区三の丸1-1"
     assert_select "input[type=checkbox][value='トイレ'][checked]"
+    assert_select "input[type=radio][value='クレーム・修理依頼'][checked]"
+    assert_select "input[type=checkbox][value='トイレが水漏れしている'][checked]"
     assert_not_requested :post, WEBHOOK_URL
   end
 
@@ -297,5 +307,73 @@ class BasicAuthTest < ActionDispatch::IntegrationTest
       get rails_health_check_path
       assert_response :success
     end
+  end
+end
+
+# 4ステップ（① 依頼場所 → ② 問い合わせ内容 → ③ 希望内容 → ④ その他伝達事項）の画面
+class RequestStepsTest < ActionDispatch::IntegrationTest
+  test "入力画面に4つのステップが順番に並ぶ" do
+    get new_inquiry_path
+    assert_select "ol.stepper li", 4
+    assert_select ".substep#step-1 h3", text: /修理の依頼場所/
+    assert_select ".substep#step-2 h3", text: /問い合わせ内容/
+    assert_select ".substep#step-3 h3", text: /お客様の希望内容/
+    assert_select ".substep#step-4 h3", text: /その他伝達事項/
+    assert_select ".substep#step-4 textarea[name='inquiry[detail]']"
+    assert_select ".substep#step-4 input[type=file]"
+    body = response.body
+    positions = (1..4).map { |n| body.index("id=\"step-#{n}\"") }
+    assert_equal positions.sort, positions
+  end
+
+  test "希望内容ごとの記入例を画面に渡している" do
+    get new_inquiry_path
+    examples = JSON.parse(css_select("textarea[name='inquiry[detail]']").first["data-examples"])
+    assert_equal AppSettings::DETAIL_EXAMPLES, examples
+  end
+
+  test "希望内容を選ばずに送ると、選ぶよう案内する" do
+    post inquiries_path, params: { inquiry: valid_params(request_type: "") }
+    assert_response :unprocessable_entity
+    assert_select ".alert-error", text: /③ お客様の希望内容を選んでください/
+  end
+
+  test "詳細画面・履歴・Slackに問い合わせ内容が出る" do
+    stub_webhook_success
+    post inquiries_path, params: { inquiry: valid_params(request_type: "クレーム・修理依頼", location_list: %w[玄関],
+                                                         issue_list: %w[玄関の鍵が開かない], detail: "夜までに来てほしい") }
+    follow_redirect!
+    assert_select "dl.detail .badge-type", text: "クレーム・修理依頼"
+    assert_select "dl.detail dd", text: "玄関"
+    assert_select "dl.detail dd", text: "玄関の鍵が開かない"
+    assert_select "dl.detail dd.pre", text: "夜までに来てほしい"
+    text = sent_webhook_texts.first
+    assert_includes text, "*問い合わせ内容*：玄関の鍵が開かない"
+    assert_includes text, "*伝達事項*：\n夜までに来てほしい"
+
+    get inquiries_path
+    assert_select "td .badge-type", text: "クレーム・修理依頼"
+    assert_select "td .small", text: "玄関｜玄関の鍵が開かない"
+  end
+
+  test "問い合わせ内容で「その他」を選んで伝達事項が空なら、書くよう案内する" do
+    post inquiries_path, params: { inquiry: valid_params(issue_list: %w[その他], detail: "") }
+    assert_response :unprocessable_entity
+    assert_select ".alert-error", text: /② で「その他」を選んだときは、④ に内容を書いてください/
+  end
+
+  test "履歴を希望内容で絞り込める" do
+    create_inquiry(customer_name: "見積の客", request_type: "見積もり依頼")
+    create_inquiry(customer_name: "修理の客", request_type: "クレーム・修理依頼")
+    get inquiries_path, params: { type: "見積もり依頼" }
+    assert_includes response.body, "見積の客"
+    refute_includes response.body, "修理の客"
+    assert_select "select[name=type] option[selected]", text: "見積もり依頼"
+  end
+
+  test "決められていない希望内容で絞り込もうとしたら全件を出す" do
+    create_inquiry(customer_name: "山田")
+    get inquiries_path, params: { type: "<script>" }
+    assert_includes response.body, "山田"
   end
 end

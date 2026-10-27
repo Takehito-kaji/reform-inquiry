@@ -23,8 +23,10 @@
       <dt>住所</dt>
       <dd><%= "〒#{i.postal_code} " if i.postal_code.present? %><%= i.address %>
         <%= link_to "地図", i.map_url, target: "_blank", rel: "noopener", class: "small" %></dd>
-      <dt>依頼内容</dt><dd><%= i.repair_items %></dd>
-      <dt>詳細メモ</dt><dd class="pre"><%= i.detail %></dd>
+      <dt>希望内容</dt><dd><span class="badge badge-type"><%= i.request_type_label %></span></dd>
+      <dt>依頼場所</dt><dd><%= i.locations.presence || "（指定なし）" %></dd>
+      <dt>問い合わせ内容</dt><dd><%= i.issues.presence || "（指定なし）" %></dd>
+      <dt>伝達事項</dt><dd class="pre"><%= i.detail %></dd>
       <dt>連絡希望</dt><dd><%= i.contact_time %></dd>
       <dt>担当営業</dt><dd><%= i.sales_person %></dd>
       <dt>添付PDF</dt>

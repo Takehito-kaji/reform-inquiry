@@ -19,8 +19,12 @@ class Inquiry < ApplicationRecord
 
   validates :customer_name, presence: { message: "お客様の氏名を入力してください" }
   validates :address,       presence: { message: "住所を入力してください" }
+  # 3ステップにする前に受け付けた分（希望内容なし）はそのまま残せるよう、新しく受け付けるときだけ確認する
+  validates :request_type,  inclusion: { in: ->(_) { AppSettings.request_types },
+                                         message: "③ お客様の希望内容を選んでください" }, on: :create
   validate  :check_phone
   validate  :check_request
+  validate  :check_other_issue
   validate  :check_attachments
 
   # 氏名・電話番号・住所のどれかに含まれる問い合わせを探す
@@ -28,16 +32,33 @@ class Inquiry < ApplicationRecord
     next all if word.blank?
 
     like = "%#{sanitize_sql_like(word)}%"
-    where("customer_name LIKE :q OR phone LIKE :q OR address LIKE :q", q: like)
+    where("customer_name LIKE :q OR phone LIKE :q OR address LIKE :q OR issues LIKE :q", q: like)
   }
 
-  # 修理内容は「、」区切りの文字で保存し、画面ではチェックボックスの配列として扱う
-  def repair_item_list
-    repair_items.to_s.split("、")
+  # 希望内容で絞り込む（空なら全部）
+  scope :of_type, ->(type) { type.present? ? where(request_type: type) : all }
+
+  # ① 依頼場所は「、」区切りの文字で保存し、画面ではチェックボックスの配列として扱う
+  def location_list
+    locations.to_s.split("、")
   end
 
-  def repair_item_list=(list)
-    self.repair_items = (Array(list).map(&:to_s) & AppSettings.all_repair_items).join("、")
+  def location_list=(list)
+    self.locations = (Array(list).map(&:to_s) & AppSettings.all_locations).join("、")
+  end
+
+  # ② 問い合わせ内容も同じく「、」区切りで保存する
+  def issue_list
+    issues.to_s.split("、")
+  end
+
+  def issue_list=(list)
+    self.issues = (Array(list).map(&:to_s) & AppSettings.all_issues).join("、")
+  end
+
+  # 画面や Slack に出す希望内容（3ステップにする前の受付は「未設定」）
+  def request_type_label
+    request_type.presence || "未設定"
   end
 
   def urgent?
@@ -51,7 +72,8 @@ class Inquiry < ApplicationRecord
   private
 
   def fix_choices
-    self.repair_items ||= ""
+    self.locations ||= ""
+    self.issues    ||= ""
     self.urgency = AppSettings::URGENCY.first unless AppSettings::URGENCY.include?(urgency)
   end
 
@@ -65,9 +87,16 @@ class Inquiry < ApplicationRecord
   end
 
   def check_request
-    return if repair_items.present? || detail.present?
+    return if locations.present? || issues.present? || detail.present?
 
-    errors.add(:base, "修理内容を1つ以上選ぶか、詳細メモを入力してください")
+    errors.add(:base, "① 依頼場所か ② 問い合わせ内容を選ぶか、④ に内容を書いてください")
+  end
+
+  # ② で「その他」を選んだときは、何があったのかを ④ に書いてもらう
+  def check_other_issue
+    return unless issue_list.include?("その他") && detail.blank?
+
+    errors.add(:base, "② で「その他」を選んだときは、④ に内容を書いてください")
   end
 
   def check_attachments

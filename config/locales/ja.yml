@@ -4,3 +4,7 @@ ja:
     messages:
       blank: "を入力してください"
       invalid: "が正しくありません"
+  activerecord:
+    errors:
+      messages:
+        record_invalid: "入力内容を確認してください：%{errors}"

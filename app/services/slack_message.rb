@@ -1,5 +1,13 @@
 # Slack に投稿する文章を作る
 class SlackMessage
+  # 希望内容ごとの見出しのマーク
+  TYPE_MARKS = {
+    "リフォーム依頼"     => "🏠",
+    "クレーム・修理依頼" => "🛠️",
+    "見積もり依頼"       => "💴",
+    "その他"             => "💬"
+  }.freeze
+
   # 担当営業へのメンション（Slack の書式： <@メンバーID>、全員は <!channel>）
   def self.mention_for(sales, urgency)
     slack_id = AppSettings::SALES_SLACK_IDS[sales].to_s.strip.delete_prefix("@").upcase
@@ -31,14 +39,14 @@ class SlackMessage
     i     = @inquiry
     e     = ->(value) { self.class.escape(value) }
     sales = i.sales_person.presence || "未定"
-    head  = i.urgent? ? "🚨【#{e.(i.urgency)}】" : "📞"
+    head  = i.urgent? ? "🚨【#{e.(i.urgency)}】" : TYPE_MARKS.fetch(i.request_type, "📞")
     kana  = i.customer_kana.present? ? "（#{e.(i.customer_kana)}）" : ""
     zip   = i.postal_code.present? ? "〒#{e.(i.postal_code)} " : ""
     mention = self.class.mention_for(sales, i.urgency)
 
     lines = []
     lines << mention if mention.present?
-    lines << "#{head} *新規リフォーム問い合わせ No.#{i.id}*"
+    lines << "#{head} *新規問い合わせ【#{e.(i.request_type_label)}】 No.#{i.id}*"
     lines << "担当営業：#{e.(sales)}"
     lines << ""
     lines << "*お客様*：#{e.(i.customer_name)} 様#{kana}"
@@ -46,8 +54,10 @@ class SlackMessage
     lines << "*住所*：#{zip}#{e.(i.address)}  <#{i.map_url}|地図を開く>"
     lines << "*連絡希望*：#{e.(i.contact_time)}" if i.contact_time.present?
     lines << ""
-    lines << "*依頼内容*：#{i.repair_items.present? ? e.(i.repair_items) : '（詳細メモ参照）'}"
-    lines << "*詳細*：\n#{e.(i.detail)}" if i.detail.present?
+    lines << "*希望内容*：#{e.(i.request_type_label)}"
+    lines << "*依頼場所*：#{i.locations.present? ? e.(i.locations) : '（伝達事項を参照）'}"
+    lines << "*問い合わせ内容*：#{i.issues.present? ? e.(i.issues) : '（伝達事項を参照）'}"
+    lines << "*伝達事項*：\n#{e.(i.detail)}" if i.detail.present?
     lines << attachment_line if attachment_names.any?
     lines << "<#{@base_url}/inquiries/#{i.id}|受付アプリで開く>" if @base_url.present? && attachment_names.empty?
     lines << ""
