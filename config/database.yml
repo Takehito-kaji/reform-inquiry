@@ -24,3 +24,5 @@ production:
   encoding: unicode
   pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
   url: <%= ENV["DATABASE_URL"] %>
+  # Render では db/schema.rb を使わず、db/migrate の手順どおりにテーブルを作る
+  schema_dump: false
