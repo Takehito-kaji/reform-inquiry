@@ -1,0 +1,198 @@
+<%= form_with model: @inquiry, url: inquiries_path, class: "sheet", id: "inquiry-form", multipart: true do |f| %>
+
+  <% if @inquiry.errors.any? %>
+    <div class="alert alert-error" role="alert">
+      <% @inquiry.errors.full_messages.each do |message| %><p><%= message %></p><% end %>
+      <% if @reselect_pdf %><p>※ 添付するPDFは、もう一度選び直してください。</p><% end %>
+    </div>
+  <% end %>
+
+  <%# ① お客様情報 %>
+  <section class="block">
+    <h2><span class="step">1</span>お客様情報</h2>
+
+    <div class="row two">
+      <label>氏名 <em>必須</em>
+        <%= f.text_field :customer_name, autocomplete: "off", autofocus: true %>
+      </label>
+      <label>フリガナ
+        <%= f.text_field :customer_kana, autocomplete: "off" %>
+      </label>
+    </div>
+
+    <label>電話番号 <em>必須</em>
+      <%= f.telephone_field :phone, placeholder: "090-1234-5678", inputmode: "tel", autocomplete: "off" %>
+    </label>
+
+    <div class="row zip">
+      <label>郵便番号
+        <%= f.text_field :postal_code, placeholder: "123-4567", inputmode: "numeric", autocomplete: "off" %>
+      </label>
+      <button type="button" class="btn-sub" id="zip-btn">住所を自動入力</button>
+    </div>
+    <p class="hint" id="zip-msg" aria-live="polite"></p>
+
+    <label>住所 <em>必須</em>
+      <%= f.text_field :address, autocomplete: "off" %>
+    </label>
+  </section>
+
+  <%# ② 依頼内容 %>
+  <section class="block">
+    <h2><span class="step">2</span>依頼内容 <small>当てはまるものをすべてタップ</small></h2>
+
+    <% AppSettings::REPAIR_CATEGORIES.each do |group, items| %>
+      <fieldset class="chips">
+        <legend><%= group %></legend>
+        <% items.each do |item| %>
+          <label class="chip">
+            <%= check_box_tag "inquiry[repair_item_list][]", item, @inquiry.repair_item_list.include?(item), id: nil %>
+            <span><%= item %></span>
+          </label>
+        <% end %>
+      </fieldset>
+    <% end %>
+
+    <%= f.label :detail, "詳細メモ", class: "label-top" %>
+    <div class="phrases">
+      <% AppSettings::QUICK_PHRASES.each do |phrase| %>
+        <button type="button" class="phrase" data-text="<%= phrase %>">＋<%= phrase %></button>
+      <% end %>
+    </div>
+    <%= f.text_area :detail, rows: 4, placeholder: "例：2階トイレの床から水がにじんでいる" %>
+
+    <div class="attach">
+      <span class="label-top">PDFを添付 <small>図面・見積依頼書など（<%= AppSettings::MAX_PDF_COUNT %>個まで、1つ<%= AppSettings::MAX_PDF_SIZE_MB %>MBまで）</small></span>
+      <label class="dropzone" id="dropzone">
+        <%= f.file_field :attachments, multiple: true, accept: "application/pdf,.pdf" %>
+        <span>ここにPDFをドラッグ、または<u>ファイルを選ぶ</u></span>
+      </label>
+      <ul class="file-list" id="file-list" aria-live="polite"></ul>
+    </div>
+
+    <fieldset class="segmented">
+      <legend>緊急度</legend>
+      <% AppSettings::URGENCY.each_with_index do |urgency, idx| %>
+        <label class="seg <%= 'seg-warn' unless idx.zero? %>">
+          <%= f.radio_button :urgency, urgency %>
+          <span><%= urgency %></span>
+        </label>
+      <% end %>
+    </fieldset>
+
+    <div class="row three">
+      <label>連絡希望の時間帯
+        <%= f.select :contact_time, AppSettings::CONTACT_TIMES %>
+      </label>
+      <label>担当営業
+        <%= f.select :sales_person, AppSettings.sales_people %>
+      </label>
+      <label>受付者
+        <%= f.select :received_by, AppSettings::OFFICE_STAFF %>
+      </label>
+    </div>
+  </section>
+
+  <%# ③ 送信 %>
+  <div class="submitbar">
+    <p class="summary" id="summary">依頼内容：未選択</p>
+    <button type="submit" class="btn-main" id="submit-btn">保存して営業に送る</button>
+  </div>
+<% end %>
+
+<script>
+  // 定型文をメモに追加
+  const detail = document.getElementById('inquiry_detail');
+  document.querySelectorAll('.phrase').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const t = btn.dataset.text;
+      detail.value = detail.value.trim() ? detail.value.trimEnd() + '\n' + t : t;
+      detail.focus();
+    });
+  });
+
+  // 選んだ内容を下のバーに表示
+  const summary = document.getElementById('summary');
+  const itemBoxes = document.querySelectorAll('input[name="inquiry[repair_item_list][]"]');
+  function updateSummary() {
+    const picked = [...itemBoxes].filter(c => c.checked).map(c => c.value);
+    summary.textContent = '依頼内容：' + (picked.length ? picked.join('、') : '未選択');
+  }
+  itemBoxes.forEach(c => c.addEventListener('change', updateSummary));
+  updateSummary();
+
+  // 郵便番号から住所を入力
+  const zipInput = document.getElementById('inquiry_postal_code');
+  const zipMsg = document.getElementById('zip-msg');
+  async function lookupZip() {
+    zipMsg.textContent = '検索中…';
+    try {
+      const res = await fetch('<%= zipcode_path %>?code=' + encodeURIComponent(zipInput.value));
+      const data = await res.json();
+      if (data.address) {
+        const addr = document.getElementById('inquiry_address');
+        addr.value = data.address;
+        addr.focus();
+        addr.setSelectionRange(addr.value.length, addr.value.length);
+        zipMsg.textContent = '続けて番地を入力してください';
+      } else {
+        zipMsg.textContent = data.error || '見つかりませんでした';
+      }
+    } catch (e) {
+      zipMsg.textContent = '住所検索に失敗しました。手入力してください';
+    }
+  }
+  document.getElementById('zip-btn').addEventListener('click', lookupZip);
+  zipInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); lookupZip(); }
+  });
+
+  // 選んだPDFを一覧表示し、送信前に形式と大きさを確認する
+  const fileInput = document.getElementById('inquiry_attachments');
+  const fileList  = document.getElementById('file-list');
+  const dropzone  = document.getElementById('dropzone');
+  const MAX_COUNT = <%= AppSettings::MAX_PDF_COUNT %>;
+  const MAX_BYTES = <%= AppSettings::MAX_PDF_SIZE_MB %> * 1024 * 1024;
+  let fileProblem = '';
+
+  function fmtSize(b) { return b >= 1048576 ? (b / 1048576).toFixed(1) + 'MB' : Math.ceil(b / 1024) + 'KB'; }
+
+  function showFiles() {
+    fileList.innerHTML = '';
+    const files = [...fileInput.files];
+    let problem = '';
+    if (files.length > MAX_COUNT) problem = `PDFは${MAX_COUNT}個までです`;
+    files.forEach(f => {
+      const li = document.createElement('li');
+      let note = fmtSize(f.size);
+      if (!/\.pdf$/i.test(f.name)) { note = 'PDFではありません'; problem = problem || note; li.className = 'bad'; }
+      else if (f.size > MAX_BYTES) { note = '<%= AppSettings::MAX_PDF_SIZE_MB %>MBを超えています'; problem = problem || note; li.className = 'bad'; }
+      li.textContent = `📄 ${f.name}（${note}）`;
+      fileList.appendChild(li);
+    });
+    if (files.length) {
+      const clear = document.createElement('li');
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'btn-link'; btn.textContent = '添付を取り消す';
+      btn.addEventListener('click', () => { fileInput.value = ''; showFiles(); });
+      clear.appendChild(btn);
+      fileList.appendChild(clear);
+    }
+    fileProblem = problem;
+  }
+  fileInput.addEventListener('change', showFiles);
+  ['dragenter', 'dragover'].forEach(ev => dropzone.addEventListener(ev, () => dropzone.classList.add('over')));
+  ['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, () => dropzone.classList.remove('over')));
+
+  // 二重送信を防ぐ（添付PDFに問題があるときは送信せず、一覧の赤い行で知らせる）
+  document.getElementById('inquiry-form').addEventListener('submit', (e) => {
+    if (fileProblem) {
+      e.preventDefault();
+      dropzone.scrollIntoView({ block: 'center' });
+      return;
+    }
+    const b = document.getElementById('submit-btn');
+    b.disabled = true;
+    b.textContent = '送信中…';
+  });
+</script>

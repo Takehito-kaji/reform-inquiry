@@ -1,0 +1,40 @@
+<div class="sheet wide">
+  <%= form_with url: inquiries_path, method: :get, class: "search" do %>
+    <%= search_field_tag :q, @q, placeholder: "氏名・電話番号・住所で検索" %>
+    <button type="submit" class="btn-sub">検索</button>
+  <% end %>
+
+  <% if @inquiries.empty? %>
+    <p class="empty">
+      <%= @q.empty? ? "まだ受付がありません。" : "該当する受付はありません。" %>
+      <%= link_to "新規入力", new_inquiry_path %>
+    </p>
+  <% else %>
+    <div class="table-wrap">
+      <table class="list">
+        <thead>
+          <tr><th>No.</th><th>受付日時</th><th>お客様</th><th>依頼内容</th><th>担当</th><th>送信</th></tr>
+        </thead>
+        <tbody>
+          <% @inquiries.each do |i| %>
+            <tr>
+              <td><%= link_to i.id, inquiry_path(i) %></td>
+              <td class="nowrap"><%= fmt_time(i.created_at) %></td>
+              <td>
+                <%= link_to "#{i.customer_name} 様", inquiry_path(i) %>
+                <% if @pdf_counts[i.id].to_i > 0 %><span class="badge badge-file" title="添付PDF">📄<%= @pdf_counts[i.id] %></span><% end %>
+                <% if i.urgent? %><span class="badge badge-warn"><%= i.urgency %></span><% end %>
+                <div class="small"><%= i.phone %></div>
+              </td>
+              <td><%= i.repair_items %></td>
+              <td class="nowrap"><%= i.sales_person %></td>
+              <td>
+                <% if i.chat_sent %><span class="badge badge-ok">済</span><% else %><span class="badge badge-err">未送信</span><% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+</div>

@@ -1,0 +1,6 @@
+ja:
+  errors:
+    format: "%{message}"
+    messages:
+      blank: "を入力してください"
+      invalid: "が正しくありません"

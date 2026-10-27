@@ -1,0 +1,26 @@
+# 開発・テスト：手元の MySQL（Sequel Ace で確認できます）
+#   接続情報は .env の DB_USER / DB_PASSWORD / DB_HOST で変えられます
+# 本番：Render の PostgreSQL（DATABASE_URL が自動で設定されます）
+
+default: &default
+  adapter: mysql2
+  encoding: utf8mb4
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  username: <%= ENV.fetch("DB_USER", "root") %>
+  password: <%= ENV.fetch("DB_PASSWORD", "") %>
+  host: <%= ENV.fetch("DB_HOST", "localhost") %>
+
+development:
+  <<: *default
+  database: reform_inquiry_development
+
+# テストを実行するたびに中身が消えるので、開発用とは別のデータベースです
+test:
+  <<: *default
+  database: reform_inquiry_test
+
+production:
+  adapter: postgresql
+  encoding: unicode
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  url: <%= ENV["DATABASE_URL"] %>

@@ -1,0 +1,17 @@
+# Git（GitHub）に上げないファイル
+
+# 設定ファイル（パスワードや Slack の URL が入るので絶対に上げない）
+/.env
+/.env.*
+!/.env.example
+
+/.bundle
+/log/*
+!/log/.keep
+/tmp/*
+!/tmp/.keep
+/storage/*
+/public/assets
+/config/master.key
+/node_modules
+.DS_Store

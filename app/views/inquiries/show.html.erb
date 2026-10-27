@@ -1,0 +1,49 @@
+<% i = @inquiry %>
+<div class="sheet">
+
+  <% if i.chat_sent %>
+    <div class="alert alert-ok">
+      <% if @from_new %>保存して Slack に送りました。<% else %>Slack 送信済み（<%= fmt_time(i.chat_sent_at) %>）<% end %>
+    </div>
+  <% else %>
+    <div class="alert alert-error">
+      <p>保存はできましたが、Slack に送れませんでした。</p>
+      <p class="small"><%= i.chat_error %></p>
+      <%= button_to "もう一度送る", resend_inquiry_path(i), class: "btn-sub", form: { class: "inline" } %>
+    </div>
+  <% end %>
+
+  <section class="block">
+    <h2>No.<%= i.id %>　<%= i.customer_name %> 様
+      <% if i.urgent? %><span class="badge badge-warn"><%= i.urgency %></span><% end %>
+    </h2>
+    <dl class="detail">
+      <dt>フリガナ</dt><dd><%= i.customer_kana %></dd>
+      <dt>電話番号</dt><dd><%= link_to i.phone, "tel:#{i.phone}" %></dd>
+      <dt>住所</dt>
+      <dd><%= "〒#{i.postal_code} " if i.postal_code.present? %><%= i.address %>
+        <%= link_to "地図", i.map_url, target: "_blank", rel: "noopener", class: "small" %></dd>
+      <dt>依頼内容</dt><dd><%= i.repair_items %></dd>
+      <dt>詳細メモ</dt><dd class="pre"><%= i.detail %></dd>
+      <dt>連絡希望</dt><dd><%= i.contact_time %></dd>
+      <dt>担当営業</dt><dd><%= i.sales_person %></dd>
+      <dt>添付PDF</dt>
+      <dd>
+        <% if @attachments.empty? %>なし<% else %>
+          <ul class="file-list">
+            <% @attachments.each do |a| %>
+              <li><%= link_to "📄 #{a.filename}", attachment_path(a), target: "_blank", rel: "noopener" %>
+                <span class="small">（<%= fmt_size(a.byte_size) %>）</span></li>
+            <% end %>
+          </ul>
+        <% end %>
+      </dd>
+      <dt>受付</dt><dd><%= i.received_by %>　<%= fmt_time(i.created_at) %></dd>
+    </dl>
+  </section>
+
+  <div class="actions">
+    <%= link_to "次の問い合わせを入力", new_inquiry_path, class: "btn-main" %>
+    <%= link_to "受付履歴へ", inquiries_path, class: "btn-link" %>
+  </div>
+</div>
